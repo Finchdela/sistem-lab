@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { 
   Calendar, 
   Clock, 
@@ -10,26 +10,25 @@ import {
   CheckCircle, 
   XCircle, 
   AlertTriangle,
-  Plus,
-  Search,
-  MapPin
+  Mail,
+  Lock,
+  CreditCard
 } from 'lucide-react';
 
 // --- KONFIGURASI SUPABASE (Placeholder) ---
-// Di VS Code Anda, ganti ini dengan process.env.REACT_APP_SUPABASE_URL dsb.
-const supabaseUrl = "https://bsxtbotieynsffqwkifo.supabase.co";
-const supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImJzeHRib3RpZXluc2ZmcXdraWZvIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjM3MDI4MDYsImV4cCI6MjA3OTI3ODgwNn0.64vjNejtjuwDZwyF8UJJ1EiKh-bNM3FgenYlxiaU8ks";
+// const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+// const supabaseAnonKey = import.meta.env.VITE_SUPABASE_KEY;
 // import { createClient } from '@supabase/supabase-js';
 // const supabase = createClient(supabaseUrl, supabaseAnonKey);
 
 // --- MOCK DATA SERVICE ---
-// Kita gunakan ini agar aplikasi bisa berjalan di Preview tanpa backend asli
-const USE_MOCK_DATA = false;
+const USE_MOCK_DATA = true;
 
+// Data user diperbarui untuk simulasi login
 const MOCK_USERS = [
   { id: 1, nama: 'Admin Lab', email: 'admin@lab.com', role: 'admin' },
-  { id: 2, nama: 'Pak Dosen', email: 'dosen@kampus.id', role: 'dosen' },
-  { id: 3, nama: 'Budi Mhs', email: 'budi@mhs.id', role: 'mahasiswa' },
+  { id: 2, nama: 'Pak Dosen', email: 'dosen@kampus.ac.id', role: 'dosen' },
+  { id: 3, nama: 'Budi Mahasiswa', email: '123456@mhs.uinsaid.ac.id', role: 'mahasiswa', nim: '123456' },
 ];
 
 const MOCK_RUANGAN = [
@@ -57,7 +56,7 @@ const MOCK_PEMINJAMAN = [
   { 
     id: 102, 
     user_id: 3, 
-    user_nama: 'Budi Mhs', 
+    user_nama: 'Budi Mahasiswa', 
     ruang_nama: 'Lab Jaringan', 
     waktu_mulai: '2023-11-26T13:00', 
     waktu_selesai: '2023-11-26T15:00', 
@@ -67,7 +66,6 @@ const MOCK_PEMINJAMAN = [
 ];
 
 // --- UTILITY COMPONENTS ---
-
 const Card = ({ children, className = "" }) => (
   <div className={`bg-white p-6 rounded-xl shadow-sm border border-slate-200 ${className}`}>
     {children}
@@ -92,15 +90,20 @@ const Badge = ({ status }) => {
 };
 
 // --- MAIN APP COMPONENT ---
-
 export default function App() {
   // Global State
-  const [currentUser, setCurrentUser] = useState(null); // null = belum login
+  const [currentUser, setCurrentUser] = useState(null);
   const [activeTab, setActiveTab] = useState('dashboard');
   
+  // Auth State (Baru)
+  const [authMode, setAuthMode] = useState('login'); // 'login' atau 'register'
+  const [loginForm, setLoginForm] = useState({ email: '', password: '' });
+  const [registerForm, setRegisterForm] = useState({ nama: '', nim: '', email: '', password: '', confirmPassword: '' });
+  const [authError, setAuthError] = useState('');
+
   // Data State
   const [peminjamanList, setPeminjamanList] = useState(MOCK_PEMINJAMAN);
-  const [inventory, setInventory] = useState(MOCK_ALAT);
+  const [inventory] = useState(MOCK_ALAT);
   
   // Form State
   const [formPinjam, setFormPinjam] = useState({
@@ -113,20 +116,77 @@ export default function App() {
 
   // --- LOGIC HANDLERS ---
 
-  const handleLogin = (role) => {
-    // Simulasi Login
-    const user = MOCK_USERS.find(u => u.role === role);
-    setCurrentUser(user);
-    setActiveTab('dashboard');
+  const validateStudentEmail = (email) => {
+    return email.endsWith('@mhs.uinsaid.ac.id');
+  };
+
+  const handleAuthSubmit = (e) => {
+    e.preventDefault();
+    setAuthError('');
+
+    if (authMode === 'login') {
+      // Simulasi Login
+      const user = MOCK_USERS.find(u => u.email === loginForm.email);
+      if (user) {
+        // Untuk simulasi, password apapun dianggap benar jika email ada
+        // Di sistem nyata, ini akan dicek dengan hash password di database
+        if (loginForm.password === '123456') { // Password sementara untuk semua user mock
+            setCurrentUser(user);
+            setActiveTab('dashboard');
+            setLoginForm({ email: '', password: '' });
+        } else {
+            setAuthError('Password salah. (Hint: gunakan 123456)');
+        }
+      } else {
+        setAuthError('Email tidak terdaftar.');
+      }
+    } else {
+      // Simulasi Register (Khusus Mahasiswa)
+      if (!registerForm.nama || !registerForm.nim || !registerForm.email || !registerForm.password) {
+        setAuthError('Semua field harus diisi.');
+        return;
+      }
+      if (!validateStudentEmail(registerForm.email)) {
+        setAuthError('Email mahasiswa harus diakhiri dengan @mhs.uinsaid.ac.id');
+        return;
+      }
+      if (registerForm.password !== registerForm.confirmPassword) {
+        setAuthError('Password dan konfirmasi password tidak cocok.');
+        return;
+      }
+      if (registerForm.password.length < 6) {
+        setAuthError('Password minimal 6 karakter.');
+        return;
+      }
+
+      // Cek email duplikat
+      if (MOCK_USERS.some(u => u.email === registerForm.email)) {
+        setAuthError('Email sudah terdaftar.');
+        return;
+      }
+
+      const newUser = {
+        id: Date.now(),
+        nama: registerForm.nama,
+        email: registerForm.email,
+        role: 'mahasiswa', // Default role untuk pendaftar baru
+        nim: registerForm.nim
+      };
+      MOCK_USERS.push(newUser); // Tambah ke data mock
+      setCurrentUser(newUser);
+      setActiveTab('dashboard');
+      setRegisterForm({ nama: '', nim: '', email: '', password: '', confirmPassword: '' });
+      alert('Registrasi berhasil! Selamat datang.');
+    }
   };
 
   const handleLogout = () => {
     setCurrentUser(null);
+    setAuthMode('login');
   };
 
   const handleAjukanPinjam = (e) => {
     e.preventDefault();
-    // Simulasi Kirim ke Supabase
     const newPinjam = {
       id: Date.now(),
       user_id: currentUser.id,
@@ -134,7 +194,7 @@ export default function App() {
       ruang_nama: formPinjam.ruang || 'Ruang Umum',
       waktu_mulai: `${formPinjam.tanggal}T${formPinjam.jamMulai}`,
       waktu_selesai: `${formPinjam.tanggal}T${formPinjam.jamSelesai}`,
-      status: 'pending', // Default pending untuk approval admin
+      status: 'pending',
       tujuan: formPinjam.tujuan
     };
     setPeminjamanList([newPinjam, ...peminjamanList]);
@@ -144,7 +204,6 @@ export default function App() {
   };
 
   const handleApproval = (id, status) => {
-    // Admin Logic
     const updatedList = peminjamanList.map(item => 
       item.id === id ? { ...item, status: status } : item
     );
@@ -153,32 +212,157 @@ export default function App() {
 
   // --- SUB-COMPONENTS (VIEWS) ---
 
-  // 1. View Login
+  // 1. View Authentication (Login & Register) - DESAIN BARU
   if (!currentUser) {
     return (
-      <div className="min-h-screen bg-slate-50 flex items-center justify-center p-4 font-sans">
-        <div className="max-w-md w-full bg-white rounded-2xl shadow-lg p-8">
-          <div className="text-center mb-8">
-            <div className="h-16 w-16 bg-blue-600 rounded-full flex items-center justify-center mx-auto mb-4">
-              <Box className="text-white w-8 h-8" />
-            </div>
-            <h1 className="text-2xl font-bold text-slate-800">Sistem Informasi Laboratorium</h1>
-            <p className="text-slate-500">Silakan pilih peran untuk simulasi login</p>
-          </div>
+      <div className="min-h-screen bg-slate-100 flex items-center justify-center p-4 font-sans">
+        <div className="bg-white rounded-2xl shadow-xl flex overflow-hidden max-w-4xl w-full lg:flex-row flex-col">
           
-          <div className="space-y-3">
-            <button onClick={() => handleLogin('admin')} className="w-full p-4 bg-slate-100 hover:bg-slate-200 rounded-lg flex items-center justify-between group transition-all">
-              <span className="font-medium text-slate-700">Login sebagai Admin (Laboran)</span>
-              <div className="bg-blue-600 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">Full Access</div>
-            </button>
-            <button onClick={() => handleLogin('dosen')} className="w-full p-4 bg-slate-100 hover:bg-slate-200 rounded-lg flex items-center justify-between group transition-all">
-              <span className="font-medium text-slate-700">Login sebagai Dosen</span>
-              <div className="bg-green-600 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">Pinjam & Lapor</div>
-            </button>
-            <button onClick={() => handleLogin('mahasiswa')} className="w-full p-4 bg-slate-100 hover:bg-slate-200 rounded-lg flex items-center justify-between group transition-all">
-              <span className="font-medium text-slate-700">Login sebagai Mahasiswa</span>
-              <div className="bg-purple-600 text-white text-xs px-2 py-1 rounded opacity-0 group-hover:opacity-100 transition-opacity">Pinjam (Baru)</div>
-            </button>
+          {/* Bagian Kiri - Gambar/Branding */}
+          <div className="lg:w-1/2 bg-blue-600 p-12 text-white flex flex-col justify-center items-center relative overflow-hidden">
+            <div className="absolute inset-0 bg-gradient-to-br from-blue-600 to-indigo-700 opacity-90 z-0"></div>
+            <div className="absolute -bottom-24 -left-24 w-64 h-64 bg-blue-500 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-blob"></div>
+            <div className="absolute -top-24 -right-24 w-64 h-64 bg-indigo-500 rounded-full mix-blend-multiply filter blur-xl opacity-70 animate-blob animation-delay-2000"></div>
+            
+            <div className="relative z-10 text-center">
+              <div className="h-20 w-20 bg-white/20 backdrop-blur-sm rounded-2xl flex items-center justify-center mx-auto mb-6 shadow-lg border border-white/30">
+                <Box className="text-white w-10 h-10" />
+              </div>
+              <h2 className="text-3xl font-bold mb-2">SILAB v3</h2>
+              <p className="text-blue-100 text-lg">Sistem Informasi Laboratorium Terpadu</p>
+              <p className="mt-6 text-sm text-blue-200 max-w-xs mx-auto">Kelola peminjaman ruang dan alat laboratorium dengan mudah, cepat, dan transparan.</p>
+            </div>
+          </div>
+
+          {/* Bagian Kanan - Form Login/Register */}
+          <div className="lg:w-1/2 p-8 sm:p-12 bg-white flex flex-col justify-center">
+            <div className="max-w-md mx-auto w-full">
+              <h3 className="text-2xl font-bold text-slate-800 mb-2">
+                {authMode === 'login' ? 'Selamat Datang Kembali' : 'Buat Akun Baru'}
+              </h3>
+              <p className="text-slate-500 mb-8">
+                {authMode === 'login' 
+                  ? 'Silahkan masukkan email dan password Anda untuk login.' 
+                  : 'Silahkan lengkapi data diri Anda untuk mendaftar sebagai Mahasiswa.'}
+              </p>
+
+              {authError && (
+                <div className="bg-red-50 text-red-600 p-3 rounded-lg text-sm flex items-center gap-2 mb-6 border border-red-200">
+                  <AlertTriangle size={16} /> {authError}
+                </div>
+              )}
+
+              <form onSubmit={handleAuthSubmit} className="space-y-5">
+                {authMode === 'register' && (
+                  <>
+                    <div className="relative">
+                      <User className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+                      <input 
+                        type="text"
+                        placeholder="Nama Lengkap"
+                        className="w-full pl-10 pr-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+                        value={registerForm.nama}
+                        onChange={e => setRegisterForm({...registerForm, nama: e.target.value})}
+                        required
+                      />
+                    </div>
+                    <div className="relative">
+                      <CreditCard className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+                      <input 
+                        type="text"
+                        placeholder="NIM"
+                        className="w-full pl-10 pr-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+                        value={registerForm.nim}
+                        onChange={e => setRegisterForm({...registerForm, nim: e.target.value})}
+                        required
+                      />
+                    </div>
+                  </>
+                )}
+
+                <div className="relative">
+                  <Mail className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+                  <input 
+                    type="email"
+                    placeholder={authMode === 'register' ? "Email (@mhs.uinsaid.ac.id)" : "Email Address"}
+                    className="w-full pl-10 pr-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+                    value={authMode === 'login' ? loginForm.email : registerForm.email}
+                    onChange={e => authMode === 'login' ? setLoginForm({...loginForm, email: e.target.value}) : setRegisterForm({...registerForm, email: e.target.value})}
+                    required
+                  />
+                </div>
+
+                <div className="relative">
+                  <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+                  <input 
+                    type="password"
+                    placeholder="Password"
+                    className="w-full pl-10 pr-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+                    value={authMode === 'login' ? loginForm.password : registerForm.password}
+                    onChange={e => authMode === 'login' ? setLoginForm({...loginForm, password: e.target.value}) : setRegisterForm({...registerForm, password: e.target.value})}
+                    required
+                  />
+                </div>
+
+                {authMode === 'register' && (
+                  <div className="relative">
+                    <Lock className="absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" size={20} />
+                    <input 
+                      type="password"
+                      placeholder="Konfirmasi Password"
+                      className="w-full pl-10 pr-4 py-3 border border-slate-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent outline-none transition-all"
+                      value={registerForm.confirmPassword}
+                      onChange={e => setRegisterForm({...registerForm, confirmPassword: e.target.value})}
+                      required
+                    />
+                  </div>
+                )}
+
+                {authMode === 'login' && (
+                  <div className="flex justify-end">
+                    <a href="#" className="text-sm text-blue-600 hover:text-blue-700 font-medium">Lupa Password?</a>
+                  </div>
+                )}
+
+                <button type="submit" className="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg transition-colors shadow-md hover:shadow-lg">
+                  {authMode === 'login' ? 'Login' : 'Daftar'}
+                </button>
+              </form>
+
+              <div className="my-8 flex items-center">
+                <div className="flex-grow border-t border-slate-200"></div>
+                <span className="flex-shrink-0 mx-4 text-slate-400 text-sm">atau lanjutkan dengan</span>
+                <div className="flex-grow border-t border-slate-200"></div>
+              </div>
+
+              <button className="w-full border border-slate-300 text-slate-700 font-medium py-3 rounded-lg hover:bg-slate-50 transition-colors flex items-center justify-center gap-2 shadow-sm">
+                <svg className="w-5 h-5" viewBox="0 0 24 24">
+                  <path d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" fill="#4285F4"/>
+                  <path d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" fill="#34A853"/>
+                  <path d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z" fill="#FBBC05"/>
+                  <path d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z" fill="#EA4335"/>
+                </svg>
+                Google
+              </button>
+
+              <div className="mt-8 text-center text-slate-500 text-sm">
+                {authMode === 'login' ? (
+                  <>
+                    Belum punya akun?{' '}
+                    <button onClick={() => { setAuthMode('register'); setAuthError(''); }} className="text-blue-600 hover:text-blue-700 font-medium">
+                      Daftar sekarang
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    Sudah punya akun?{' '}
+                    <button onClick={() => { setAuthMode('login'); setAuthError(''); }} className="text-blue-600 hover:text-blue-700 font-medium">
+                      Login disini
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
           </div>
         </div>
       </div>
@@ -187,7 +371,7 @@ export default function App() {
 
   // 2. View Dashboard Components
   const renderSidebar = () => (
-    <div className="w-64 bg-slate-900 text-white min-h-screen fixed left-0 top-0 p-4 hidden md:block">
+    <div className="w-64 bg-slate-900 text-white min-h-screen fixed left-0 top-0 p-4 hidden md:block z-10">
       <div className="flex items-center gap-3 mb-10 px-2">
         <Box className="text-blue-400" />
         <span className="font-bold text-xl">SILAB v3</span>
@@ -529,7 +713,7 @@ export default function App() {
       {/* Main Content Area */}
       <main className="flex-1 md:ml-64 p-8">
         {/* Mobile Header */}
-        <div className="md:hidden mb-6 flex justify-between items-center">
+        <div className="md:hidden mb-6 flex justify-between items-center relative z-20">
           <h1 className="font-bold text-xl">SILAB v3</h1>
           <button onClick={handleLogout}><LogOut size={20} /></button>
         </div>
